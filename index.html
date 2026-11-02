@@ -1,0 +1,348 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROBOVERSE XR</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#07111d;color:#e8f4ff;font-family:Arial}
+header{padding:16px 22px;background:#0d1c2c;display:flex;
+justify-content:space-between;align-items:center;flex-wrap:wrap}
+h2{margin:0;color:#42dcff}
+main{display:grid;grid-template-columns:1fr 290px;gap:14px;padding:14px}
+#view{height:75vh;min-height:420px;position:relative;
+border:1px solid #23445b;border-radius:12px;overflow:hidden}
+#view canvas{display:block}
+.panel{background:#102236;border:1px solid #23445b;
+border-radius:12px;padding:15px;margin-bottom:12px}
+h3{margin:0 0 12px;color:#42dcff}
+button{background:#087eaa;color:white;border:0;padding:10px 13px;
+border-radius:7px;margin:4px;cursor:pointer}
+button:hover{background:#10a8d7}
+input{width:100%;accent-color:#42dcff}
+label{display:block;margin:12px 0 4px;font-size:13px}
+.stat{display:flex;justify-content:space-between;margin:10px 0}
+.value{color:#42dcff;font-weight:bold}
+#overlay{position:absolute;top:12px;left:12px;pointer-events:none;
+background:#07111ddd;padding:12px;border:1px solid #42dcff;
+border-radius:8px;font-size:12px;line-height:1.7}
+#status{color:#55ef9b}
+#warning{color:#ff7373}
+#vr{position:absolute;bottom:12px;right:12px}
+@media(max-width:800px){main{grid-template-columns:1fr}
+#view{height:55vh}}
+</style>
+</head>
+<body>
+<header>
+<h2>⚙ ROBOVERSE XR</h2>
+<span>AI ROBOTICS DIGITAL TWIN | LIVE SIMULATION</span>
+</header>
+
+<main>
+<section id="view">
+<div id="overlay">
+<b>ROBOT STATUS: ONLINE</b><br>
+Mode: <span id="mode">3D SIMULATION</span><br>
+AI: <span id="ai">NORMAL</span><br>
+Coordinates: <span id="coords">0, 0, 0</span>
+</div>
+<button id="vr">ENTER VR</button>
+</section>
+
+<aside>
+<div class="panel">
+<h3>Robot Control</h3>
+<label>Base Rotation: <span id="v0">0</span>°</label>
+<input id="j0" type="range" min="-90" max="90" value="0">
+<label>Shoulder: <span id="v1">25</span>°</label>
+<input id="j1" type="range" min="-45" max="90" value="25">
+<label>Elbow: <span id="v2">-30</span>°</label>
+<input id="j2" type="range" min="-120" max="90" value="-30">
+<label>Wrist: <span id="v3">0</span>°</label>
+<input id="j3" type="range" min="-90" max="90" value="0">
+<button id="home">HOME POSITION</button>
+<button id="auto">AUTO MOVE</button>
+</div>
+
+<div class="panel">
+<h3>Live Sensors</h3>
+<div class="stat">Temperature <span class="value" id="temp">42°C</span></div>
+<div class="stat">Motor Speed <span class="value" id="speed">120 RPM</span></div>
+<div class="stat">Battery <span class="value" id="battery">96%</span></div>
+<div class="stat">AI Diagnosis <span id="status">NORMAL</span></div>
+</div>
+
+<div class="panel">
+<h3>AI Fault Simulation</h3>
+<button id="fault">INJECT OVERHEATING</button>
+<button id="reset">RESET SYSTEM</button>
+<p id="warning">No faults detected.</p>
+</div>
+
+<div class="panel">
+<h3>XR Display</h3>
+<button id="ar">AR OVERLAY ON/OFF</button>
+<button id="info">COMPONENT INFO</button>
+<p id="details">Select component information to inspect the robot.</p>
+</div>
+</aside>
+</main>
+
+<script type="importmap">
+{
+ "imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+ }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {VRButton} from 'three/addons/webxr/VRButton.js';
+
+const container=document.getElementById('view');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x07111d);
+scene.fog=new THREE.Fog(0x07111d,15,35);
+
+const camera=new THREE.PerspectiveCamera(55,
+container.clientWidth/container.clientHeight,0.1,100);
+camera.position.set(7,6,9);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(container.clientWidth,container.clientHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.xr.enabled=true;
+container.appendChild(renderer.domElement);
+
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.target.set(0,2,0);
+controls.enableDamping=true;
+
+scene.add(new THREE.HemisphereLight(0xbdeaff,0x263344,2));
+const light=new THREE.DirectionalLight(0xffffff,3);
+light.position.set(5,10,7);
+scene.add(light);
+
+const grid=new THREE.GridHelper(20,40,0x1688aa,0x173449);
+scene.add(grid);
+
+function material(color,metalness=.5){
+ return new THREE.MeshStandardMaterial({
+ color,metalness,roughness:.35
+ });
+}
+const blue=material(0x087fae);
+const silver=material(0xaabccc,.8);
+const orange=material(0xffa52c);
+const dark=material(0x142d40);
+
+function box(parent,w,h,d,mat,x,y,z){
+ const mesh=new THREE.Mesh(
+ new THREE.BoxGeometry(w,h,d),mat);
+ mesh.position.set(x,y,z);
+ parent.add(mesh);
+ return mesh;
+}
+function cylinder(parent,r1,r2,h,mat,x,y,z){
+ const mesh=new THREE.Mesh(
+ new THREE.CylinderGeometry(r1,r2,h,32),mat);
+ mesh.position.set(x,y,z);
+ parent.add(mesh);
+ return mesh;
+}
+
+// Robot base
+const base=new THREE.Group();
+scene.add(base);
+cylinder(base,.9,.9,.35,dark,0,.2,0);
+cylinder(base,.65,.65,.2,blue,0,.45,0);
+
+// Rotating joints
+const shoulder=new THREE.Group();
+shoulder.position.y=.65;
+base.add(shoulder);
+cylinder(shoulder,.48,.48,.45,orange,0,0,0);
+
+// Arm segment
+const upper=new THREE.Group();
+upper.position.y=.15;
+shoulder.add(upper);
+box(upper,.32,2,.38,blue,0,1,0);
+cylinder(upper,.28,.28,.38,silver,0,0,0);
+
+// Elbow
+const elbow=new THREE.Group();
+elbow.position.y=2;
+upper.add(elbow);
+cylinder(elbow,.32,.32,.42,orange,0,0,0);
+
+// Forearm
+const forearm=new THREE.Group();
+forearm.position.y=.1;
+elbow.add(forearm);
+box(forearm,.26,1.6,.3,silver,0,.8,0);
+
+// Wrist
+const wrist=new THREE.Group();
+wrist.position.y=1.6;
+forearm.add(wrist);
+cylinder(wrist,.22,.22,.4,orange,0,0,0);
+
+// Gripper
+box(wrist,.55,.18,.25,blue,0,.25,0);
+box(wrist,.12,.5,.15,orange,-.2,.55,0);
+box(wrist,.12,.5,.15,orange,.2,.55,0);
+
+// Decorative joints
+function joint(parent,y){
+ const m=new THREE.Mesh(
+ new THREE.SphereGeometry(.2,24,24),orange);
+ m.position.y=y;
+ parent.add(m);
+}
+joint(upper,1);
+joint(forearm,.8);
+
+// Floor and industrial platform
+box(scene,3,.12,3,dark,0,-.15,0);
+
+// Labels
+const labels=[];
+function makeLabel(text,x,y,z){
+ const canvas=document.createElement('canvas');
+ canvas.width=512;canvas.height=128;
+ const ctx=canvas.getContext('2d');
+ ctx.fillStyle='#071b2b';
+ ctx.fillRect(0,0,512,128);
+ ctx.strokeStyle='#42dcff';
+ ctx.lineWidth=5;ctx.strokeRect(4,4,504,120);
+ ctx.fillStyle='#42dcff';
+ ctx.font='bold 42px Arial';
+ ctx.fillText(text,20,80);
+ const tex=new THREE.CanvasTexture(canvas);
+ const sprite=new THREE.Sprite(
+ new THREE.SpriteMaterial({map:tex,transparent:true}));
+ sprite.position.set(x,y,z);
+ sprite.scale.set(2.3,.58,1);
+ scene.add(sprite);labels.push(sprite);
+}
+makeLabel('MOTOR JOINT',0,4.1,0);
+makeLabel('ROBOT ARM',1.8,3,0);
+makeLabel('END EFFECTOR',0,2,1);
+
+let fault=false,arOn=true,auto=false;
+const sliders=[0,1,2,3].map(i=>
+ document.getElementById('j'+i));
+
+function updateRobot(){
+ const values=sliders.map(s=>THREE.MathUtils.degToRad(+s.value));
+ base.rotation.y=values[0];
+ shoulder.rotation.z=-values[1];
+ elbow.rotation.z=-values[2];
+ wrist.rotation.z=values[3];
+ values.forEach((v,i)=>{
+ document.getElementById('v'+i).textContent=sliders[i].value;
+ });
+ const p=new THREE.Vector3(0,0,0);
+ wrist.getWorldPosition(p);
+ document.getElementById('coords').textContent=
+ p.x.toFixed(1)+', '+p.y.toFixed(1)+', '+p.z.toFixed(1);
+}
+sliders.forEach(s=>s.addEventListener('input',updateRobot));
+updateRobot();
+
+document.getElementById('home').onclick=()=>{
+ [0,25,-30,0].forEach((v,i)=>sliders[i].value=v);
+ updateRobot();
+};
+
+document.getElementById('auto').onclick=()=>{
+ auto=!auto;
+ document.getElementById('auto').textContent=
+ auto?'STOP AUTO':'AUTO MOVE';
+};
+
+document.getElementById('fault').onclick=()=>{
+ fault=true;
+ document.getElementById('temp').textContent='92°C';
+ document.getElementById('speed').textContent='40 RPM';
+ document.getElementById('ai').textContent='OVERHEATING';
+ document.getElementById('status').textContent='WARNING';
+ document.getElementById('warning').textContent=
+ 'AI ALERT: Motor overheating detected. Reduce load and inspect motor.';
+};
+
+document.getElementById('reset').onclick=()=>{
+ fault=false;
+ document.getElementById('temp').textContent='42°C';
+ document.getElementById('speed').textContent='120 RPM';
+ document.getElementById('ai').textContent='NORMAL';
+ document.getElementById('status').textContent='NORMAL';
+ document.getElementById('warning').textContent='System restored.';
+};
+
+document.getElementById('ar').onclick=()=>{
+ arOn=!arOn;
+ labels.forEach(l=>l.visible=arOn);
+ document.getElementById('mode').textContent=
+ arOn?'AR-STYLE OVERLAY':'3D SIMULATION';
+};
+
+document.getElementById('info').onclick=()=>{
+ document.getElementById('details').textContent=
+ 'Industrial robotic arm: Base controls rotation, shoulder and elbow control reach, wrist controls end-effector orientation. Sensors monitor motor condition.';
+};
+
+renderer.xr.addEventListener('sessionstart',()=>{
+ document.getElementById('mode').textContent='VR IMMERSIVE';
+});
+renderer.xr.addEventListener('sessionend',()=>{
+ document.getElementById('mode').textContent='3D SIMULATION';
+});
+
+// Actual WebXR VR button, if supported
+const vrButton = VRButton.createButton(renderer);
+vrButton.style.position = 'absolute';
+vrButton.style.bottom = '12px';
+vrButton.style.right = '12px';
+vrButton.style.left = 'auto';
+vrButton.style.width = 'auto';
+container.appendChild(vrButton);
+document.getElementById('vr').remove();
+
+let last=0;
+renderer.setAnimationLoop(time=>{
+ const dt=Math.min((time-last)/1000,.05);
+ last=time;
+ if(auto&&!fault){
+ const t=time*.001;
+ sliders[0].value=Math.sin(t)*50;
+ sliders[1].value=25+Math.sin(t*1.2)*20;
+ sliders[2].value=-30+Math.sin(t*1.5)*25;
+ sliders[3].value=Math.sin(t*2)*35;
+ updateRobot();
+ }
+ if(!fault){
+ const temp=42+Math.round(Math.sin(time*.001)*3);
+ document.getElementById('temp').textContent=temp+'°C';
+ document.getElementById('battery').textContent=
+ Math.max(50,96-Math.floor(time/60000))+'%';
+ }
+ controls.update();
+ renderer.render(scene,camera);
+});
+
+window.addEventListener('resize',()=>{
+ camera.aspect=container.clientWidth/container.clientHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(container.clientWidth,container.clientHeight);
+});
+</script>
+</body>
+</html>
